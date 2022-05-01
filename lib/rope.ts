@@ -7,7 +7,7 @@
 /*
   Will Howard:
   This is my solution, I have also added another test and pushed it to a git repo: https://github.com/Will-Howard/cea-test-solution
-  I'm not super familiar with typescript, so the code style might not be completely standard, but I do think I've got the implementation
+  Typescript is not the main language I use, so the code style might not be completely standard, but I do think I've got the implementation
   basically correct. So if there is a bug, it's not because I ran out of time, it's an actual mistake.
 
   Overview of implementation:
