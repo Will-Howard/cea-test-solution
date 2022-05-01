@@ -80,3 +80,31 @@ describe('Extra Credit: tree is rebalanced', () => {
     },
   }))
 })
+
+describe("extra tests", () => {
+  test("multiple edge cases", () => {
+    // this is not necessarily an example of "good testing practices"
+    // I'm just trying to cover as many edge cases as possible with the time I have left
+    const base = createLeaf('')
+    const insertOnce = insert(base, '123', 0)
+    expect(insertOnce.toString()).toEqual('123')
+
+    const insertTwice = insert(insertOnce, '', 3)
+    expect(insertTwice.toString()).toEqual('123')
+
+    const rebalanced = rebalance(insertTwice)
+    expect(rebalanced.toString()).toEqual('123')
+
+    const deleted = deleteRange(rebalanced, 0, 3)
+    expect(deleted.toString()).toEqual('')
+
+    const deletedAgain = deleteRange(deleted, 0, 0)
+    expect(deletedAgain.toString()).toEqual('')
+
+    const rebalancedAgain = deleteRange(deletedAgain, 0, 0)
+    expect(rebalancedAgain.toString()).toEqual('')
+
+    const insertedAgain = insert(insert(rebalancedAgain, '123', 0), '456', 2)
+    expect(insertedAgain.toString()).toEqual('124563')
+  });
+});
