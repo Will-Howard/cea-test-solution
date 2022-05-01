@@ -19,9 +19,11 @@ type MapRepresentation = MapBranch | MapLeaf
 interface IRope {
   toString: () => string,
   size: () => number,
+  weight: () => number,
   height: () => number,
   toMap: () => MapRepresentation,
   isBalanced: () => Boolean
+  collectLeaves: () => RopeLeaf[],
 }
 
 export class RopeLeaf implements IRope {
@@ -41,6 +43,10 @@ export class RopeLeaf implements IRope {
     return this.text.length;
   }
 
+  weight() {
+    return this.size();
+  }
+
   height() {
     return 1;
   }
@@ -55,12 +61,17 @@ export class RopeLeaf implements IRope {
   isBalanced() {
     return true;
   }
+
+  collectLeaves() {
+    return [this];
+  }
 }
 
 export class RopeBranch implements IRope {
   left: IRope;
   right: IRope;
   cachedSize: number;
+  cachedWeight: number;
 
   constructor(left: IRope, right: IRope) {
     this.left = left;
@@ -69,6 +80,7 @@ export class RopeBranch implements IRope {
     // You may wish to rewrite this property or create a different one.
     this.cachedSize = (left ? left.size() : 0) +
       (right ? right.size() : 0)
+    this.cachedWeight = (left ? left.size() : 0)
   }
 
   // how deep the tree is (I.e. the maximum depth of children)
@@ -80,6 +92,10 @@ export class RopeBranch implements IRope {
   // You may wish to rewrite this method or create a different one.
   size() {
     return this.cachedSize;
+  }
+
+  weight() {
+    return this.cachedWeight;
   }
 
   /*
@@ -121,11 +137,15 @@ export class RopeBranch implements IRope {
     return (this.left ? this.left.toString() : '')
       + (this.right ? this.right.toString() : '')
   }
+
+  collectLeaves() {
+    return [this.left.collectLeaves(), this.right.collectLeaves()].flat();  // could also do ...
+  }
 }
 
 
 export function createRopeFromMap(map: MapRepresentation): IRope {
-  if (map.kind == 'leaf') {
+  if (map.kind === 'leaf') {
     return new RopeLeaf(map.text)
   }
 
@@ -138,17 +158,110 @@ export function createRopeFromMap(map: MapRepresentation): IRope {
 // This is an internal API. You can implement it however you want. 
 // (E.g. you can choose to mutate the input rope or not)
 function splitAt(rope: IRope, position: number): { left: IRope, right: IRope } {
-  // TODO
+  // if branch:
+    // if position is equal to rope weight, just return left and right nodes
+    // if position is less than weight, call splitAt on left node with same position, then return left.left, concat(left.right, right)
+    // if position is greater than weight, call splitAt on right node with (position - root node weight), then return concat(left, right.left), right.right
+  // if leaf:
+    // split the string at the position, construct a new rope from the two halves, and return it
+  const weight = rope.weight();
+  const size = rope.size();
+
+  // if position is out of range, that's definitely an error
+  // if it is 0 or size, you end up with one leaf being empty, it's not clear from the spec if that's ok or not,
+  // but it doesn't cause any problems so I'm not going to worry about it
+  if (position < 0 || position > size) throw "invalid position"
+
+  if (rope instanceof RopeLeaf) {
+    const left = new RopeLeaf(rope.text.slice(0, position));
+    const right = new RopeLeaf(rope.text.slice(position));
+    return {left: left, right: right};
+  } else if (rope instanceof RopeBranch) {
+    if (position === weight) {
+      return { left: rope.left, right: rope.right };
+    } else if (position < weight) {
+      const { left, right } = splitAt(rope.left, position);
+      return { left, right: new RopeBranch(right, rope.right) };
+    } else {
+      const { left, right } = splitAt(rope.right, position - weight);
+      return { left: new RopeBranch(rope.left, left), right };
+    }
+  }
+}
+
+function prepend(rope: IRope, text: string): IRope {
+  // if leaf, promote to branch, with new string on left, and old string on right
+  // if branch, call prepend on left node
+  if (rope instanceof RopeLeaf) {
+    return new RopeBranch(new RopeLeaf(text), rope);
+  } else if (rope instanceof RopeBranch) { // is RopeBranch
+    return new RopeBranch(prepend(rope.left, text), rope.right);
+  }
+}
+
+function append(rope: IRope, text: string) {
+  // if leaf, promote to branch, with old string on left, and new string on right
+  // if branch, call append on right node
+  if (rope instanceof RopeLeaf) {
+    return new RopeBranch(rope, new RopeLeaf(text));
+  } else if (rope instanceof RopeBranch) { // is RopeBranch
+    return new RopeBranch(rope.left, append(rope.right, text));
+  }
 }
 
 export function deleteRange(rope: IRope, start: number, end: number): IRope {
-  // TODO
+  // l = split rope at start
+  // r = split rope at start + end (or split l.right at end - start)
+  // return concat(l.left, r.right)
+  const size = rope.size()
+  if (start < 0 || end > size || end < start) throw "invalid range"
+  if (start === end) return rope
+
+  const { left, right } = splitAt(rope, start);
+  // I'm doing this because I think it's slightly more efficient, but it would be more readable
+  // to do splitAt(rope, end)
+  const { right: rightRight } = splitAt(right, end - start);
+
+  return new RopeBranch(left, rightRight);
 }
 
 export function insert(rope: IRope, text: string, location: number): IRope {
-  // TODO
+  // if location == 0, prepend
+  // if location == rope.size(), append
+  // else, split rope at location, concat(append(left, text), right)
+  if (location === 0) {
+    return prepend(rope, text);
+  } else if (location === rope.size()) {
+    return append(rope, text);
+  } else {
+    const { left, right } = splitAt(rope, location);
+    return new RopeBranch(append(left, text), right);
+  }
+}
+
+export function merge(leaves: RopeLeaf[]): IRope {
+  if (leaves.length === 1) return leaves[0];
+  if (leaves.length === 2) return new RopeBranch(leaves[0], leaves[1]);
+
+  const mid = Math.floor(leaves.length / 2);
+  return new RopeBranch(merge(leaves.slice(0, mid)), merge(leaves.slice(mid)));
 }
 
 export function rebalance(rope: IRope): IRope {
-  // TODO
+  // if isBalanced(rope), return rope
+  // collect leaves
+  // if leaves.length == 1, return leaf
+  // if leaves.length == 2, return new RopeBranch(leaf1, leaf2)
+  // const mid = Math.floor(range / 2)
+  // else return new RopeBranch(merge(leaves.slice(0, mid)), merge(leaves.slice(mid)))
+  if (rope.isBalanced()) return rope
+
+  const leaves = rope.collectLeaves();
+  return merge(leaves);
 }
+
+// DONE 1:07 remaining
+// cleanup todos fixmes etc DONE
+// 30 mins testing edge cases
+// 30 mins refactoring
+// PASTE CODE IN JUST IN CASE
