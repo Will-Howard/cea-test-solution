@@ -7,6 +7,8 @@
 /*
   Will Howard:
   This is my solution, I have also added another test and pushed it to a git repo: https://github.com/Will-Howard/cea-test-solution
+  I'm not super familiar with typescript, so the code style might not be completely standard, but I do think I've got the implementation
+  basically correct. So if there is a bug, it's not because I ran out of time, it's an actual mistake.
 
   Overview of implementation:
   For insert(S, k, W):
@@ -17,8 +19,9 @@
   - build new rope from A.left, B.right
   For rebalance(S):
   - collect all the leaves in the rope
-  - split the leaves into left and right halves, and recursively build a new rope from leftLeaves, rightLeaves
-  (i.e. effectively call rebalance on leftLeaves and rightLeaves until there are only one or two leaves, at which point they can be trivially merged)
+  - split the leaves into left and right halves, and recursively build a new rope from leftLeaves, rightLeaves.
+  i.e. effectively call rebalance (actually `merge`, to avoid having to rebuild a left and right rope) on leftLeaves and rightLeaves until there are only one or two leaves,
+  at which point they can be trivially merged
 */
 
 type MapBranch = {
@@ -271,9 +274,3 @@ export function rebalance(rope: IRope): IRope {
   const leaves = rope.collectLeaves();
   return merge(leaves);
 }
-
-// DONE 1:07 remaining
-// cleanup todos fixmes etc DONE
-// 30 mins testing edge cases
-// 30 mins refactoring
-// PASTE CODE IN JUST IN CASE
