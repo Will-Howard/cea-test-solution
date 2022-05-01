@@ -4,6 +4,23 @@
   The type annotations are just there in case they are helpful.
 */
 
+/*
+  Will Howard:
+  This is my solution, I have also added another test and pushed it to a git repo: https://github.com/Will-Howard/cea-test-solution
+
+  Overview of implementation:
+  For insert(S, k, W):
+  - add prepend and append functions for trivial cases
+  - else split the rope at position k, and build a new rope from left + W, right
+  For deleteRange(S, k, l):
+  - split the rope at k (into A), and at l (into B)
+  - build new rope from A.left, B.right
+  For rebalance(S):
+  - collect all the leaves in the rope
+  - split the leaves into left and right halves, and recursively build a new rope from leftLeaves, rightLeaves
+  (i.e. effectively call rebalance on leftLeaves and rightLeaves until there are only one or two leaves, at which point they can be trivially merged)
+*/
+
 type MapBranch = {
   left?: MapRepresentation,
   right?: MapRepresentation,
@@ -102,6 +119,7 @@ export class RopeBranch implements IRope {
     Whether the rope is balanced, i.e. whether any subtrees have branches
     which differ by more than one in height. 
   */
+  // NOTE: I haven't checked this implementation too carefully, I'm just assuming it's correct
   isBalanced(): boolean {
     const leftBalanced = this.left ? this.left.isBalanced() : true
     const rightBalanced = this.right ? this.right.isBalanced() : true
@@ -155,28 +173,24 @@ export function createRopeFromMap(map: MapRepresentation): IRope {
   return new RopeBranch(left, right);
 }
 
-// This is an internal API. You can implement it however you want. 
-// (E.g. you can choose to mutate the input rope or not)
 function splitAt(rope: IRope, position: number): { left: IRope, right: IRope } {
-  // if branch:
-    // if position is equal to rope weight, just return left and right nodes
-    // if position is less than weight, call splitAt on left node with same position, then return left.left, concat(left.right, right)
-    // if position is greater than weight, call splitAt on right node with (position - root node weight), then return concat(left, right.left), right.right
-  // if leaf:
-    // split the string at the position, construct a new rope from the two halves, and return it
   const weight = rope.weight();
   const size = rope.size();
 
-  // if position is out of range, that's definitely an error
-  // if it is 0 or size, you end up with one leaf being empty, it's not clear from the spec if that's ok or not,
-  // but it doesn't cause any problems so I'm not going to worry about it
+  // if position is out of range, throw an error
+  // NOTE: if I was implementing this for an actual use case, I would probably make it gracefully handle this case
+  // and return an empty leaf for the left or right node. But nothing about error handling was mentioned in the spec so I'm not going to worry about it too much
   if (position < 0 || position > size) throw "invalid position"
 
   if (rope instanceof RopeLeaf) {
+    // split the string at the position, construct a new rope from the two halves, and return it
     const left = new RopeLeaf(rope.text.slice(0, position));
     const right = new RopeLeaf(rope.text.slice(position));
     return {left: left, right: right};
   } else if (rope instanceof RopeBranch) {
+    // if position is equal to rope weight, just return left and right nodes
+    // if position is less than weight, call splitAt on left node with same position, then return left.left, concat(left.right, right)
+    // if position is greater than weight, call splitAt on right node with (position - root node weight), then return concat(left, right.left), right.right
     if (position === weight) {
       return { left: rope.left, right: rope.right };
     } else if (position < weight) {
@@ -211,8 +225,8 @@ function append(rope: IRope, text: string) {
 
 export function deleteRange(rope: IRope, start: number, end: number): IRope {
   // l = split rope at start
-  // r = split rope at start + end (or split l.right at end - start)
-  // return concat(l.left, r.right)
+  // r = split rope at start + end
+  // new RopeBranch(l.left, r.right)
   const size = rope.size()
   if (start < 0 || end > size || end < start) throw "invalid range"
   if (start === end) return rope
@@ -228,7 +242,7 @@ export function deleteRange(rope: IRope, start: number, end: number): IRope {
 export function insert(rope: IRope, text: string, location: number): IRope {
   // if location == 0, prepend
   // if location == rope.size(), append
-  // else, split rope at location, concat(append(left, text), right)
+  // else, split rope at location, then return new RopeBranch(append(left, text), right)
   if (location === 0) {
     return prepend(rope, text);
   } else if (location === rope.size()) {
@@ -239,21 +253,19 @@ export function insert(rope: IRope, text: string, location: number): IRope {
   }
 }
 
-export function merge(leaves: RopeLeaf[]): IRope {
+function merge(leaves: RopeLeaf[]): IRope {
+  // if there are only one or two leaves, just construct the final rope
   if (leaves.length === 1) return leaves[0];
   if (leaves.length === 2) return new RopeBranch(leaves[0], leaves[1]);
 
+  // else, split the leaves into two (roughly) equal groups, and recurse
   const mid = Math.floor(leaves.length / 2);
   return new RopeBranch(merge(leaves.slice(0, mid)), merge(leaves.slice(mid)));
 }
 
 export function rebalance(rope: IRope): IRope {
-  // if isBalanced(rope), return rope
-  // collect leaves
-  // if leaves.length == 1, return leaf
-  // if leaves.length == 2, return new RopeBranch(leaf1, leaf2)
-  // const mid = Math.floor(range / 2)
-  // else return new RopeBranch(merge(leaves.slice(0, mid)), merge(leaves.slice(mid)))
+  // if already balances, return
+  // else get a list of all the leaves, and merge them into a balanced rope
   if (rope.isBalanced()) return rope
 
   const leaves = rope.collectLeaves();
